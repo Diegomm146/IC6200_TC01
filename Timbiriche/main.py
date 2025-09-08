@@ -2,7 +2,7 @@ import random
 import copy
 import time
 
-class DotsAndBoxes:
+class DotsAndBoxes: 
     """
     Implementación del juego Dots and Boxes para un tablero 3x3.
     
@@ -14,7 +14,7 @@ class DotsAndBoxes:
     - current_player: jugador actual (0=MAX, 1=MIN)
     """
     
-    def __init__(self, size=3):
+    def __init__(self, size=5):
         """
         Inicializa el tablero de Dots and Boxes.
         
@@ -45,9 +45,6 @@ class DotsAndBoxes:
         """
         Imprime el estado actual del tablero en consola.
         """
-        print("\n" + "="*40)
-        print(f"Puntuación - MAX: {self.scores[0]}, MIN: {self.scores[1]}")
-        print(f"Turno del jugador: {'MAX' if self.current_player == 0 else 'MIN'}")
         print("="*40)
         
         # Imprimir el tablero línea por línea
@@ -83,6 +80,10 @@ class DotsAndBoxes:
                         else:
                             line += "   "
                 print(line)
+        print("="*40)
+        print(f"\nPuntuación - MAX: {self.scores[0]}, MIN: {self.scores[1]}")
+        print(f"Siguiente turno del jugador: {'MAX' if self.current_player == 0 else 'MIN'}")
+        print("="*40)
     
     def get_possible_moves(self):
         """
@@ -215,7 +216,7 @@ class DotsAndBoxes:
                 self.completed_boxes[box_row][box_col] = True
                 self.scores[self.current_player] += 1
                 completed_boxes_count += 1
-                print(f"¡Jugador {'MAX' if self.current_player == 0 else 'MIN'} completó cuadro ({box_row},{box_col})!")
+                #print(f"¡Jugador {'MAX' if self.current_player == 0 else 'MIN'} completó cuadro ({box_row},{box_col})!")
         
         # Si no se completaron cuadros, cambiar de jugador
         if completed_boxes_count == 0:
@@ -254,12 +255,10 @@ class MinimaxPlayer:
     Jugador que usa el algoritmo Minimax para tomar decisiones.
     """
     
-    def __init__(self, max_depth=4):
+    def __init__(self, max_depth):
         """
         Inicializa el jugador Minimax.
         
-        Args:
-            max_depth (int): Profundidad máxima de búsqueda
         """
         self.max_depth = max_depth
         self.nodes_explored = 0
@@ -334,7 +333,7 @@ class MinimaxPlayer:
         best_move = None
         best_value = float('-inf') if game_state.current_player == 0 else float('inf')
         
-        print(f"\n🤖 Minimax analizando {len(possible_moves)} movimientos posibles...")
+        print(f"Minimax analizando {len(possible_moves)} movimientos posibles...")
         
         for i, move in enumerate(possible_moves):
             # Simular el movimiento
@@ -361,9 +360,9 @@ class MinimaxPlayer:
         
         end_time = time.time()
         
-        print(f"🎯 Mejor movimiento: {best_move} (Valor: {best_value})")
-        print(f"⏱️  Tiempo: {end_time - start_time:.3f}s")
-        print(f"🔍 Nodos explorados: {self.nodes_explored}")
+        print(f"\nMejor movimiento: {best_move} (Valor: {best_value})")
+        print(f"Tiempo: {end_time - start_time:.3f}s")
+        print(f"Nodos explorados: {self.nodes_explored}")
         
         return best_move
 
@@ -376,38 +375,25 @@ class RandomPlayer:
         """
         Selecciona un movimiento aleatorio.
         
-        Args:
-            game_state (DotsAndBoxes): Estado actual del juego
-            
-        Returns:
-            tuple: Movimiento aleatorio (tipo, fila, columna)
         """
         possible_moves = game_state.get_possible_moves()
         if not possible_moves:
             return None
         
         move = random.choice(possible_moves)
-        print(f"🎲 Jugador aleatorio elige: {move}")
+        print(f"Movimiento jugador aleatorio: {move}")
         return move
 
 def play_game(player1, player2, show_board=True):
         """
         Simula una partida entre dos jugadores.
         
-        Args:
-            player1: Jugador que será MAX (jugador 0)
-            player2: Jugador que será MIN (jugador 1) 
-            show_board (bool): Si mostrar el tablero en cada movimiento
-            
-        Returns:
-            tuple: (ganador, puntuación_final, número_movimientos)
         """
-        game = DotsAndBoxes()
+        game = DotsAndBoxes(size=3)
         players = [player1, player2]
         
-        print("🎮 ¡INICIANDO PARTIDA!")
+        print("¡INICIANDO PARTIDA!")
         print("Player 1 (MAX) vs Player 2 (MIN)")
-        print("="*50)
         
         if show_board:
             game.print_board()
@@ -415,8 +401,8 @@ def play_game(player1, player2, show_board=True):
         while not game.is_game_over():
             current_player_obj = players[game.current_player]
             player_name = "MAX" if game.current_player == 0 else "MIN"
-            
-            print(f"\n--- Turno de {player_name} ---")
+            print("\n" * 10)
+            print(f"\n--- Turno de {player_name} ---\n")
             
             # Obtener el mejor movimiento del jugador actual
             move = current_player_obj.get_best_move(game)
@@ -442,7 +428,7 @@ def play_game(player1, player2, show_board=True):
         else:
             winner = "EMPATE"
         
-        print(f"\n🏆 RESULTADO FINAL:")
+        print(f"\n RESULTADO FINAL:")
         print(f"   Ganador: {winner}")
         print(f"   Puntuación: MAX={game.scores[0]}, MIN={game.scores[1]}")
         print(f"   Total movimientos: {game.total_moves}")
@@ -451,17 +437,19 @@ def play_game(player1, player2, show_board=True):
 
 # Ejemplo de partida: Minimax vs Aleatorio
 if __name__ == "__main__":
-    print("🎯 DOTS AND BOXES - MINIMAX VS ALEATORIO")
+    print("Timbirichi- MINIMAX VS ALEATORIO")
     print("="*50)
     
-    # Crear jugadores
-    minimax_player = MinimaxPlayer(max_depth=3)  # Profundidad 3 para que no sea muy lento
+    minimax_player = MinimaxPlayer(max_depth=2)  
     random_player = RandomPlayer()
+
+    minimax_player2 = MinimaxPlayer(max_depth=4)  
     
     # Jugar una partida
-    winner, scores, moves = play_game(minimax_player, random_player, show_board=True)
+    winner, scores, moves = play_game(minimax_player, minimax_player2, show_board=True)
     
-    print(f"\n📊 ESTADÍSTICAS FINALES:")
+    print("="*50)
+    print(f"\nESTADÍSTICAS FINALES:")
     print(f"   Minimax (MAX): {scores[0]} puntos")
     print(f"   Aleatorio (MIN): {scores[1]} puntos") 
     print(f"   Movimientos totales: {moves}")
@@ -476,7 +464,7 @@ if __name__ == "__main__":
             ties = 0
             
             for i in range(num_games):
-                winner, _, _ = play_game(minimax_player, random_player, show_board=False)
+                winner, _, _ = play_game(minimax_player, minimax_player2, show_board=False)
                 if winner == "MAX":
                     minimax_wins += 1
                 elif winner == "MIN":
@@ -484,8 +472,8 @@ if __name__ == "__main__":
                 else:
                     ties += 1
                 print(f"Partida {i+1}: {winner}")
-            
-            print(f"\n🏆 RESULTADOS DE {num_games} PARTIDAS:")
+            print("="*50)
+            print(f"\nRESULTADOS DE {num_games} PARTIDAS:")
             print(f"   Minimax ganó: {minimax_wins} ({minimax_wins/num_games*100:.1f}%)")
             print(f"   Aleatorio ganó: {random_wins} ({random_wins/num_games*100:.1f}%)")
             print(f"   Empates: {ties} ({ties/num_games*100:.1f}%)")
