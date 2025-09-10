@@ -243,12 +243,103 @@ class DotsAndBoxes:
     
     def evaluate_position(self):
         """
-        Función de evaluación básica para Minimax.
+        Función de evaluación heurística que considera 4 factores principales.
         
         Returns:
-            int: Diferencia de puntuación (MAX_score - MIN_score)
+            float: Valor de evaluación (positivo favorece a MAX, negativo a MIN)
         """
-        return self.scores[0] - self.scores[1]
+        #formas de evaluar, SUPER HEURÍSTICA:
+
+            # Diferencia de puntuación actual = peso 50
+            # Cuadros casi completos = peso 20
+            # movilidad = peso 2 (cantidad de movimientos posibles)
+            # Bonus por turno continuo = peso 3
+
+        
+        if self.is_game_over():
+            return (self.scores[0] - self.scores[1]) * 100  # Multiplicar para dar más peso
+        
+        evaluation = 0.0
+        
+        # 1. DIFERENCIA DE PUNTUACIÓN ACTUAL (peso 50)
+        score_diff = self.scores[0] - self.scores[1]
+        evaluation += score_diff * 50
+        
+        # 2. CUADROS CASI COMPLETOS (peso 20)
+        max_almost_complete = 0
+        min_almost_complete = 0
+        
+        for row in range(self.size):
+            for col in range(self.size):
+                if not self.completed_boxes[row][col]:
+                    sides_drawn = self.count_box_sides(row, col)
+                    
+                    # Cuadros con 3 lados son críticos
+                    if sides_drawn == 3:
+                        # El jugador actual puede completarlo = ventaja
+                        if self.current_player == 0:  # MAX
+                            max_almost_complete += 1
+                        else:  # MIN
+                            min_almost_complete += 1
+                    
+                    # Cuadros con 2 lados son oportunidades
+                    elif sides_drawn == 2:
+                        if self.current_player == 0:
+                            max_almost_complete += 0.3
+                        else:
+                            min_almost_complete += 0.3
+        
+        # Favor al jugador que puede completar cuadros, penalizar al que da oportunidades
+        evaluation += max_almost_complete * 20
+        evaluation -= min_almost_complete * 20
+        
+        # 3. MOVILIDAD (peso 2) - cantidad de movimientos posibles
+        mobility = len(self.get_possible_moves())
+        evaluation += mobility * 2
+        
+        # 4. BONUS POR TURNO CONTINUO (peso 3)
+        # Si el jugador actual completó cuadros en su último turno, pequeño bonus
+        if len(self.move_history) > 0:
+            last_move = self.move_history[-1]
+            if last_move[3] == self.current_player:  # Mismo jugador que el movimiento anterior
+                evaluation += 3 if self.current_player == 0 else -3
+        
+        return evaluation
+
+    def count_box_sides(self, box_row, box_col):
+        """
+        Cuenta cuántos lados de un cuadro específico están dibujados.
+        
+        Args:
+            box_row (int): Fila del cuadro
+            box_col (int): Columna del cuadro
+            
+        Returns:
+            int: Número de lados dibujados (0-4)
+        """
+        if (box_row < 0 or box_row >= self.size or 
+            box_col < 0 or box_col >= self.size):
+            return 0
+        
+        sides = 0
+        
+        # Lado superior
+        if self.horizontal_lines[box_row][box_col]:
+            sides += 1
+        
+        # Lado inferior
+        if self.horizontal_lines[box_row + 1][box_col]:
+            sides += 1
+        
+        # Lado izquierdo
+        if self.vertical_lines[box_row][box_col]:
+            sides += 1
+        
+        # Lado derecho  
+        if self.vertical_lines[box_row][box_col + 1]:
+            sides += 1
+        
+        return sides
 
 class MinimaxPlayer:
     """
@@ -384,12 +475,12 @@ class RandomPlayer:
         print(f"Movimiento jugador aleatorio: {move}")
         return move
 
-def play_game(player1, player2, show_board=True):
+def play_game(player1, player2, sizeBoard, show_board=True):
         """
         Simula una partida entre dos jugadores.
         
         """
-        game = DotsAndBoxes(size=3)
+        game = DotsAndBoxes(sizeBoard)
         players = [player1, player2]
         
         print("¡INICIANDO PARTIDA!")
@@ -440,13 +531,14 @@ if __name__ == "__main__":
     print("Timbirichi- MINIMAX VS ALEATORIO")
     print("="*50)
     
-    minimax_player = MinimaxPlayer(max_depth=2)  
+    minimax_player = MinimaxPlayer(max_depth=3)  
     random_player = RandomPlayer()
 
-    minimax_player2 = MinimaxPlayer(max_depth=4)  
+
+    sizeBoard = 5
     
     # Jugar una partida
-    winner, scores, moves = play_game(minimax_player, minimax_player2, show_board=True)
+    winner, scores, moves = play_game(minimax_player, random_player, sizeBoard, show_board=True)
     
     print("="*50)
     print(f"\nESTADÍSTICAS FINALES:")
@@ -464,7 +556,7 @@ if __name__ == "__main__":
             ties = 0
             
             for i in range(num_games):
-                winner, _, _ = play_game(minimax_player, minimax_player2, show_board=False)
+                winner, _, _ = play_game(minimax_player, random_player, sizeBoard, show_board=False)
                 if winner == "MAX":
                     minimax_wins += 1
                 elif winner == "MIN":
