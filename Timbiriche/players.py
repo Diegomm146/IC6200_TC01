@@ -32,19 +32,32 @@ class MinimaxPlayer:
     def get_best_move(self, state):
         """Selecciona el mejor movimiento evaluando con Minimax."""
         moves = state.get_possible_moves()
+        start_time = time.time()
         if not moves:
             return None
         best = None
         best_val = float("-inf") if state.current_player == 0 else float("inf")
 
-        for m in moves:
+        print(f"Minimax analizando {len(moves)} movimientos posibles...")
+
+        for i, m in enumerate(moves):
             new_state = state.copy_game_state()
             new_state.make_move(*m)
             val = self.minimax(new_state, self.max_depth-1, new_state.current_player==0)
+
+            print(f"   Movimiento {i+1}: {m} → Valor: {val}")
+
+            # Actualizar el mejor movimiento
+
             if state.current_player == 0 and val > best_val:
                 best_val, best = val, m
             elif state.current_player == 1 and val < best_val:
                 best_val, best = val, m
+                
+        end_time = time.time()
+        print(f"\nMejor movimiento: {best} (Valor: {best_val})")
+        print(f"Tiempo: {end_time - start_time:.3f}s")
+        print(f"Nodos explorados: {self.nodes_explored}")
         return best
 
 
