@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from game import DotsAndBoxes
 from players import MinimaxPlayer, RandomPlayer
 from utils import print_board
+import time
 
 def play_game(p1, p2, size, show=True, collect_stats=False):
     game = DotsAndBoxes(size)
@@ -11,7 +12,6 @@ def play_game(p1, p2, size, show=True, collect_stats=False):
     while not game.is_game_over():
         player_idx = game.current_player
         player = players[player_idx]
-        import time
         start = time.time()
         move = player.get_best_move(game)
         elapsed = time.time() - start
@@ -28,18 +28,24 @@ def play_game(p1, p2, size, show=True, collect_stats=False):
     return None
 
 if __name__ == "__main__":
-    minimax = MinimaxPlayer(max_depth=3)
+    minimax = MinimaxPlayer(max_depth=4)
     random_player = RandomPlayer()
-    # random_player = RandomPlayer()
     num_games = 10
+    sizeMap = 3
 
     all_times = [[], []]
     all_nodes = [[], []]
     minimax_wins = 0
     minimax_scores = []
     random_scores = []
+    game_durations = []  # <<< NUEVO: duración total de cada partida
+
     for _ in range(num_games):
-        times, nodes, scores = play_game(minimax, random_player, size=3, show=False, collect_stats=True)
+        start_game = time.time()  # medir inicio
+        times, nodes, scores = play_game(minimax, random_player, sizeMap, show=False, collect_stats=True)
+        duration_game = time.time() - start_game  # medir duración total
+        game_durations.append(duration_game)
+
         for i in [0, 1]:
             all_times[i].extend(times[i])
             all_nodes[i].extend(nodes[i])
@@ -47,32 +53,44 @@ if __name__ == "__main__":
         random_scores.append(scores[1])
         if scores[0] > scores[1]:
             minimax_wins += 1
+
     # Graficar
-    plt.figure(figsize=(16,4))
-    plt.subplot(1,4,1)
+    plt.figure(figsize=(20,4))
+
+    plt.subplot(1,5,1)
     plt.plot(all_times[0], marker='o', color='blue', label='Minimax')
     plt.plot(all_times[1], marker='o', color='red', label='Random')
     plt.title("Tiempo por jugada")
     plt.xlabel("Jugada")
     plt.ylabel("Segundos")
     plt.legend()
-    plt.subplot(1,4,2)
+
+    plt.subplot(1,5,2)
     plt.plot(all_nodes[0], marker='o', color='blue', label='Minimax')
     plt.plot(all_nodes[1], marker='o', color='red', label='Random')
     plt.title("Nodos explorados por jugada")
     plt.xlabel("Jugada")
     plt.ylabel("Nodos")
     plt.legend()
-    plt.subplot(1,4,3)
+
+    plt.subplot(1,5,3)
     plt.bar(["Minimax", "Random"], [minimax_wins, num_games-minimax_wins], color=['blue','red'])
     plt.title("Tasa de éxito (partidas ganadas)")
     plt.ylabel("Partidas ganadas")
-    plt.subplot(1,4,4)
+
+    plt.subplot(1,5,4)
     plt.plot(minimax_scores, marker='o', color='blue', label='Minimax')
     plt.plot(random_scores, marker='o', color='red', label='Random')
     plt.title("Puntaje final por partida")
     plt.xlabel("Partida")
     plt.ylabel("Puntaje")
     plt.legend()
+
+    plt.subplot(1,5,5)
+    plt.bar(range(1, num_games+1), game_durations, color="purple")
+    plt.title("Duración total de cada partida")
+    plt.xlabel("Partida")
+    plt.ylabel("Segundos")
+
     plt.tight_layout()
     plt.show()
