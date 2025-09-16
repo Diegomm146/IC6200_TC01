@@ -20,6 +20,6 @@ def play_game(p1, p2, size, show=True):
     print_board(game)
 
 if __name__ == "__main__":
-    minimax = MinimaxPlayer(max_depth=5)
+    minimax = MinimaxPlayer(max_depth=4)
     random_player = RandomPlayer()
-    play_game(minimax, random_player, size=2, show=True)
+    play_game(minimax, random_player, size=3, show=True)

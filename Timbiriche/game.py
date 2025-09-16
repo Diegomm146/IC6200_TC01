@@ -117,7 +117,10 @@ class DotsAndBoxes:
         if self.is_game_over():
             return (self.scores[0] - self.scores[1]) * 100
 
+        # Diferencia de puntos
         score = (self.scores[0] - self.scores[1]) * 50
+        
+        # Cuadros casi completados
         for r in range(self.size):
             for c in range(self.size):
                 if not self.completed_boxes[r][c]:
@@ -127,7 +130,10 @@ class DotsAndBoxes:
                     elif sides == 2:
                         score += 6 if self.current_player == 0 else -6
 
+        # Movimientos disponibles
         score += len(self.get_possible_moves()) * 2
+
+        # Control de turno
         if self.move_history and self.move_history[-1][3] == self.current_player:
             score += 3 if self.current_player == 0 else -3
         return score
