@@ -20,7 +20,7 @@ def make_env():
 # ================================
 # Representación genética
 # ================================
-def create_individual(num_steps: int) -> np.ndarray:
+def create_individual(num_steps):
     """
     Crea un individuo (cromosoma) para el algoritmo genético.
     Cada individuo es una secuencia de 'num_steps' acciones aleatorias.
@@ -36,7 +36,7 @@ def create_individual(num_steps: int) -> np.ndarray:
     ])
 
 
-def expand_plan(individual: np.ndarray, action_repeat: int):
+def expand_plan(individual, action_repeat):
     """
     Expande el plan de acciones de un individuo repitiendo cada acción 'action_repeat' veces.
     Esto permite que cada decisión macro abarque varios frames.
@@ -44,7 +44,7 @@ def expand_plan(individual: np.ndarray, action_repeat: int):
     # (D,3) -> (D*ACTION_REPEAT, 3)
     return np.repeat(individual, action_repeat, axis=0)
 
-def init_population(pop_size: int, num_steps: int):
+def init_population(pop_size, num_steps):
     """
     Inicializa la población con 'pop_size' individuos, cada uno con 'num_steps' acciones.
     """
@@ -53,7 +53,7 @@ def init_population(pop_size: int, num_steps: int):
 # ================================
 # Evaluation (parallel, early stopping)
 # ================================
-def evaluate_population_parallel(population: list[np.ndarray], action_repeat: int, neg_streak_limit: int = 80, max_envs: int = 8):
+def evaluate_population_parallel(population, action_repeat, neg_streak_limit=80, max_envs=8):
     """
     Evalúa la población de individuos en paralelo usando varios entornos.
     Permite early stopping si un individuo acumula demasiadas recompensas negativas seguidas.
@@ -111,7 +111,7 @@ def evaluate_population_parallel(population: list[np.ndarray], action_repeat: in
 # ================================
 # Selection / Crossover / Mutation
 # ================================
-def tournament_selection(population: list[np.ndarray], fitness: np.ndarray, k: int = 3):
+def tournament_selection(population, fitness, k=3):
     """
     Selección por torneo: elige aleatoriamente 'k' individuos y retorna el de mayor fitness.
     Parámetros:
@@ -132,8 +132,9 @@ def crossover(parent1, parent2):
     """
     n = len(parent1)
     point = np.random.randint(1, n - 1)
-    return (np.vstack([parent1[:point], parent2[point:]]),
-            np.vstack([parent2[:point], parent1[point:]]))
+    child1 = np.vstack([parent1[:point], parent2[point:]])
+    child2 = np.vstack([parent2[:point], parent1[point:]])
+    return child1, child2
 
 
 def mutate(individual, mutation_rate=0.05):
@@ -170,11 +171,16 @@ def next_generation(population, fitness, elite_size=2, mutation_rate=0.05):
     elite_idx = elite_idx[np.argsort(fitness[elite_idx])[::-1]]
     new_pop = [population[i].copy() for i in elite_idx] 
 
-    # Completa la población con hijos generados
+    # Resto de la población
     while len(new_pop) < n:
+        # Selección de padres por torneo
         p1 = tournament_selection(population, fitness)
         p2 = tournament_selection(population, fitness)
+
+        # Cruce
         c1, c2 = crossover(p1, p2)
+        
+        # Mutación
         c1 = mutate(c1, mutation_rate)
         c2 = mutate(c2, mutation_rate)
         new_pop.extend([c1, c2])
@@ -185,13 +191,13 @@ def next_generation(population, fitness, elite_size=2, mutation_rate=0.05):
 # GA main
 # ================================
 def genetic_algorithm(
-    generations: int = 10,
-    pop_size: int = 32,
-    num_steps: int = 30,
-    action_repeat: int = 4,
-    mutation_rate: float = 0.08,
-    elite_size: int = 2,
-    neg_streak_limit: int = 80,
+    generations=10,
+    pop_size=32,
+    num_steps=30,
+    action_repeat=4,
+    mutation_rate=0.08,
+    elite_size=2,
+    neg_streak_limit=80,
 ):
     """
     Ejecuta el Algoritmo Genético sobre CarRacing-v3 usando evaluación paralela y macro-acciones.
@@ -213,27 +219,19 @@ def genetic_algorithm(
     avg_fitness_history = []
 
     for gen in range(generations):
-        fitness_scores = evaluate_population_parallel(
-            population,
-            action_repeat=action_repeat,
-            neg_streak_limit=neg_streak_limit,
-        )
+        fitness_scores = evaluate_population_parallel(population, action_repeat=action_repeat, neg_streak_limit=neg_streak_limit)
 
-        max_fit = float(np.max(fitness_scores))
-        avg_fit = float(np.mean(fitness_scores))
-        max_fitness_history.append(max_fit)
-        avg_fitness_history.append(avg_fit)
+        max_fitness = float(np.max(fitness_scores))
+        avg_fitness = float(np.mean(fitness_scores))
+        max_fitness_history.append(max_fitness)
+        avg_fitness_history.append(avg_fitness)
 
-        print(f"Gen {gen+1:>3}/{generations} | Max: {max_fit:7.2f} | Avg: {avg_fit:7.2f}")
+        print(f"Gen {gen+1:>3}/{generations} | Max: {max_fitness:7.2f} | Avg: {avg_fitness:7.2f}")
 
         population = next_generation(population, fitness_scores, elite_size=elite_size, mutation_rate=mutation_rate)
 
     # Evaluación final para elegir el mejor individuo
-    final_fitness = evaluate_population_parallel(
-        population,
-        action_repeat=action_repeat,
-        neg_streak_limit=neg_streak_limit,
-    )
+    final_fitness = evaluate_population_parallel(population, action_repeat=action_repeat, neg_streak_limit=neg_streak_limit)
     best_idx = int(np.argmax(final_fitness))
     best_individual = population[best_idx].copy()
 
