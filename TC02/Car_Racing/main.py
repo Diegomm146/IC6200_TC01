@@ -1,27 +1,34 @@
-import gymnasium as gym
-from gymnasium.vector import AsyncVectorEnv
-import numpy as np
-import matplotlib.pyplot as plt
-import random
-import time
+import gymnasium as gym  # Entorno de simulación CarRacing
+from gymnasium.vector import AsyncVectorEnv  # Para evaluación paralela de entornos
+import numpy as np  # Operaciones numéricas y manejo de arreglos
+import matplotlib.pyplot as plt  # Visualización de resultados
+import random  # Funciones aleatorias para selección y mutación
+import time  # Medición de tiempo de ejecución
 
 # ================================
-# Helpers to construct envs
+# Función auxiliar para crear entornos de CarRacing
 # ================================
 def make_env():
+    """
+    Crea una función que inicializa un entorno CarRacing-v3 con parámetros fijos.
+    Útil para la evaluación paralela.
+    """
     def _thunk():
         return gym.make("CarRacing-v3", render_mode="rgb_array", lap_complete_percent=0.95, domain_randomize=False, continuous=True)
     return _thunk
 
 # ================================
-# Genetic representation (macro-actions)
+# Representación genética
 # ================================
 def create_individual(num_steps: int) -> np.ndarray:
     """
-    Crea un individuo (cromosoma).
-    Cada individuo es una secuencia de NUM_STEPS acciones aleatorias.
+    Crea un individuo (cromosoma) para el algoritmo genético.
+    Cada individuo es una secuencia de 'num_steps' acciones aleatorias.
+    Cada acción tiene 3 valores: [steer, gas, brake].
+    - steer: entre -1 y 1
+    - gas: entre 0 y 1
+    - brake: entre 0 y 1
     """
-    # steer entre -1 y 1, gas y brake entre 0 y 1
     return np.column_stack([
         np.random.uniform(-1, 1, num_steps), # steer
         np.random.uniform(0, 1, num_steps), # gas
@@ -30,12 +37,16 @@ def create_individual(num_steps: int) -> np.ndarray:
 
 
 def expand_plan(individual: np.ndarray, action_repeat: int):
+    """
+    Expande el plan de acciones de un individuo repitiendo cada acción 'action_repeat' veces.
+    Esto permite que cada decisión macro abarque varios frames.
+    """
     # (D,3) -> (D*ACTION_REPEAT, 3)
     return np.repeat(individual, action_repeat, axis=0)
 
 def init_population(pop_size: int, num_steps: int):
     """
-    Crea la población inicial con 'pop_size' individuos.
+    Inicializa la población con 'pop_size' individuos, cada uno con 'num_steps' acciones.
     """
     return [create_individual(num_steps) for _ in range(pop_size)]
 
@@ -44,13 +55,21 @@ def init_population(pop_size: int, num_steps: int):
 # ================================
 def evaluate_population_parallel(population: list[np.ndarray], action_repeat: int, neg_streak_limit: int = 80, max_envs: int = 8):
     """
-    Evaluate population in chunks to limit the number of subprocesses.
+    Evalúa la población de individuos en paralelo usando varios entornos.
+    Permite early stopping si un individuo acumula demasiadas recompensas negativas seguidas.
+    Parámetros:
+    - population: lista de individuos a evaluar.
+    - action_repeat: cuántos frames dura cada acción.
+    - neg_streak_limit: límite de pasos negativos antes de terminar el episodio.
+    - max_envs: número máximo de entornos paralelos.
+    Retorna:
+    - Lista de puntajes (fitness) para cada individuo.
     """
     n = len(population)
     if n == 0:
         return []
 
-    # Pre-expand
+    # Pre-expande los planes de acción
     expanded_all = [expand_plan(ind, action_repeat) for ind in population]
     T = len(expanded_all[0])
 
@@ -94,13 +113,11 @@ def evaluate_population_parallel(population: list[np.ndarray], action_repeat: in
 # ================================
 def tournament_selection(population: list[np.ndarray], fitness: np.ndarray, k: int = 3):
     """
-    Selección por torneo.
-
+    Selección por torneo: elige aleatoriamente 'k' individuos y retorna el de mayor fitness.
     Parámetros:
     - population: lista de individuos.
     - fitness: lista con fitness de cada individuo.
     - k: tamaño del torneo (por defecto 3).
-
     Retorna:
     - individuo ganador del torneo.
     """
@@ -110,10 +127,8 @@ def tournament_selection(population: list[np.ndarray], fitness: np.ndarray, k: i
 
 def crossover(parent1, parent2):
     """
-    Cruza dos padres usando 1-point crossover.
-
-    Retorna:
-    - hijo1, hijo2
+    Cruza dos padres usando 1-point crossover (un solo punto de corte).
+    Retorna dos hijos combinando partes de ambos padres.
     """
     n = len(parent1)
     point = np.random.randint(1, n - 1)
@@ -124,8 +139,7 @@ def crossover(parent1, parent2):
 def mutate(individual, mutation_rate=0.05):
     """
     Aplica mutación sobre un individuo.
-
-    Cada gen (acción) tiene 'mutation_rate' de chance de cambiar.
+    Cada gen (acción) tiene 'mutation_rate' de probabilidad de ser alterado aleatoriamente.
     """
     mutant = individual.copy()
     mask = np.random.rand(len(mutant)) < mutation_rate 
@@ -139,38 +153,30 @@ def mutate(individual, mutation_rate=0.05):
 
 def next_generation(population, fitness, elite_size=2, mutation_rate=0.05):
     """
-    Crea la siguiente generación usando:
-    - Elitismo (los mejores pasan directo).
-    - Torneo + crossover + mutación para el resto.
-
+    Crea la siguiente generación de la población usando:
+    - Elitismo: los mejores 'elite_size' individuos pasan directo.
+    - El resto se genera por torneo, crossover y mutación.
     Parámetros:
     - population: lista de individuos.
     - fitness: lista con fitness de cada uno.
     - elite_size: número de mejores que pasan directo.
     - mutation_rate: probabilidad de mutación por gen.
     """
-    # Ordenamos por fitness
     fitness = np.asarray(fitness)
     n = len(population)
 
-    # Elites
+    # Elitismo: selecciona los mejores
     elite_idx = np.argpartition(fitness, -elite_size)[-elite_size:]
     elite_idx = elite_idx[np.argsort(fitness[elite_idx])[::-1]]
     new_pop = [population[i].copy() for i in elite_idx] 
 
-    # Fill the rest
+    # Completa la población con hijos generados
     while len(new_pop) < n:
-        # Selección por torneo
         p1 = tournament_selection(population, fitness)
         p2 = tournament_selection(population, fitness)
-        
-        # Crossover
         c1, c2 = crossover(p1, p2)
         c1 = mutate(c1, mutation_rate)
-        
-        # Mutación
         c2 = mutate(c2, mutation_rate)
-        
         new_pop.extend([c1, c2])
     return new_pop[:n]
 
@@ -188,11 +194,18 @@ def genetic_algorithm(
     neg_streak_limit: int = 80,
 ):
     """
-    Run the Genetic Algorithm on CarRacing-v3 with parallel evaluation and macro-actions.
-
-    Returns:
-      best_individual (np.ndarray): best macro-action sequence (num_steps, 3)
-      history (dict): { 'max_fitness': [...], 'avg_fitness': [...] }
+    Ejecuta el Algoritmo Genético sobre CarRacing-v3 usando evaluación paralela y macro-acciones.
+    Parámetros:
+    - generations: número de generaciones a ejecutar.
+    - pop_size: tamaño de la población.
+    - num_steps: número de decisiones macro por episodio.
+    - action_repeat: frames por decisión.
+    - mutation_rate: probabilidad de mutación por gen.
+    - elite_size: número de élites.
+    - neg_streak_limit: límite de pasos negativos antes de terminar.
+    Retorna:
+    - best_individual (np.ndarray): mejor secuencia de macro-acciones (num_steps, 3)
+    - history (dict): historial de fitness máximo y promedio por generación
     """
     population = init_population(pop_size, num_steps)
 
@@ -215,7 +228,7 @@ def genetic_algorithm(
 
         population = next_generation(population, fitness_scores, elite_size=elite_size, mutation_rate=mutation_rate)
 
-    # Final evaluation to pick best
+    # Evaluación final para elegir el mejor individuo
     final_fitness = evaluate_population_parallel(
         population,
         action_repeat=action_repeat,
@@ -235,7 +248,11 @@ def genetic_algorithm(
 # ================================
 def render_individual_realtime_smooth(individual: np.ndarray, action_repeat: int = 4):
     """
-    Visualize a single individual with 'rgb_array' rendering outside training.
+    Visualiza en tiempo real la ejecución de un individuo en el entorno CarRacing-v3.
+    Muestra el entorno usando matplotlib y actualiza el frame en cada paso.
+    Parámetros:
+    - individual: secuencia de acciones a ejecutar.
+    - action_repeat: cuántos frames dura cada acción.
     """
     env = gym.make(
         "CarRacing-v3",
@@ -273,6 +290,14 @@ def render_individual_realtime_smooth(individual: np.ndarray, action_repeat: int
 # Simple console menu
 # ================================
 def main_menu():
+    """
+    Menú principal de consola para interactuar con el algoritmo genético.
+    Permite:
+    1. Ejecutar el algoritmo genético con parámetros configurables.
+    2. Visualizar el mejor individuo encontrado.
+    3. Graficar la evolución del fitness.
+    4. Salir del programa.
+    """
     best_individual = None
     history = None
     defaults = {
@@ -286,22 +311,22 @@ def main_menu():
     }
 
     while True:
-        print("\n--- MAIN MENU ---")
-        print("1. Run Genetic Algorithm (optimized)")
-        print("2. Visualize best individual")
-        print("3. Plot fitness evolution")
-        print("4. Exit")
-        opt = input("Choose an option: ").strip()
+        print("\n--- MENÚ PRINCIPAL ---")
+        print("1. Ejecutar Algoritmo Genético")
+        print("2. Visualizar mejor individuo")
+        print("3. Graficar evolución del fitness")
+        print("4. Salir")
+        opt = input("Elige una opción: ").strip()
 
         if opt == "1":
             try:
-                gens = input(f"Generations [{defaults['generations']}]: ").strip()
-                pop  = input(f"Population size [{defaults['pop_size']}]: ").strip()
-                decs = input(f"Macro-decisions per episode [{defaults['num_steps']}]: ").strip()
-                arep = input(f"Action repeat (frames/decision) [{defaults['action_repeat']}]: ").strip()
-                mut  = input(f"Mutation rate [{defaults['mutation_rate']}]: ").strip()
-                elite = input(f"Elite size [{defaults['elite_size']}]: ").strip()
-                nsl  = input(f"Negative streak limit [{defaults['neg_streak_limit']}]: ").strip()
+                gens = input(f"Generaciones [{defaults['generations']}]: ").strip()
+                pop  = input(f"Tamaño de población [{defaults['pop_size']}]: ").strip()
+                decs = input(f"Numero de pasos por episodio [{defaults['num_steps']}]: ").strip()
+                arep = input(f"Repeticiones por acción [{defaults['action_repeat']}]: ").strip()
+                mut  = input(f"Tasa de mutación [{defaults['mutation_rate']}]: ").strip()
+                elite = input(f"Tamaño de élite [{defaults['elite_size']}]: ").strip()
+                nsl  = input(f"Límite de racha negativa [{defaults['neg_streak_limit']}]: ").strip()
 
                 gens = int(gens) if gens else defaults['generations']
                 pop  = int(pop) if pop else defaults['pop_size']
@@ -311,7 +336,7 @@ def main_menu():
                 elite = int(elite) if elite else defaults['elite_size']
                 nsl  = int(nsl) if nsl else defaults['neg_streak_limit']
             except ValueError:
-                print("Invalid input. Using defaults.")
+                print("Entrada inválida. Usando valores por defecto.")
                 gens = defaults['generations']
                 pop  = defaults['pop_size']
                 decs = defaults['num_steps']
@@ -331,34 +356,34 @@ def main_menu():
                 neg_streak_limit=nsl,
             )
             dur = time.time() - start
-            print(f"\nGA finished in {dur:.1f}s")
+            print(f"\nAlgoritmo genético finalizado en {dur:.1f}s")
 
         elif opt == "2":
             if best_individual is None:
-                print("Run the GA first.")
+                print("Primero ejecuta el algoritmo genético.")
             else:
-                arep = input("Action repeat for visualization [4]: ").strip()
+                arep = input("Frames por decisión para visualización [4]: ").strip()
                 arep = int(arep) if arep else 4
                 render_individual_realtime_smooth(best_individual, action_repeat=arep)
 
         elif opt == "3":
             if history is None:
-                print("Run the GA first.")
+                print("Primero ejecuta el algoritmo genético.")
             else:
                 plt.figure()
-                plt.plot(history["max_fitness"], label="Max fitness")
-                plt.plot(history["avg_fitness"], label="Avg fitness")
-                plt.xlabel("Generation")
+                plt.plot(history["max_fitness"], label="Fitness máximo")
+                plt.plot(history["avg_fitness"], label="Fitness promedio")
+                plt.xlabel("Generación")
                 plt.ylabel("Fitness")
-                plt.title("Fitness evolution")
+                plt.title("Evolución del fitness")
                 plt.legend()
                 plt.show()
 
         elif opt == "4":
-            print("Bye!")
+            print("¡Hasta luego!")
             break
         else:
-            print("Invalid option. Try again.")
+            print("Opción inválida. Intenta de nuevo.")
 
 if __name__ == "__main__":
     main_menu()
