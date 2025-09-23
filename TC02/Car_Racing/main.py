@@ -4,6 +4,69 @@ import numpy as np  # Operaciones numéricas y manejo de arreglos
 import matplotlib.pyplot as plt  # Visualización de resultados
 import random  # Funciones aleatorias para selección y mutación
 import time  # Medición de tiempo de ejecución
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+
+# crear un video visualizando el mejor individuo de varias pruebas de experimentos.
+# Pruebas
+
+# ================================
+# Prueba A — Exploración amplia
+# Datos / Parámetros:
+# pop_size = 80
+# generations = 50
+# num_steps = 200
+# action_repeat = 4
+# mutation_rate = 0.12
+# elite_size = 4
+# selection = torneo (k=3)
+# crossover = 1-point
+# repetitions = 3–5
+
+# Objetivo / Explicación:
+# Evaluar si una mayor diversidad inicial compensa menos iteraciones.
+# Gran población introduce diversidad; pocas generaciones limitan refinamiento.
+# Mutación alta para mantener exploración.
+# Se espera alta varianza entre corridas y tiempo por generación alto.
+
+# ================================
+# Prueba B — Profundización
+# Datos / Parámetros:
+# pop_size = 30
+# generations = 100
+# num_steps = 200
+# action_repeat = 4
+# mutation_rate = 0.06
+# elite_size = 2
+# selection = torneo (k=3)
+# crossover = 1-point
+# repetitions = 3–5
+
+# Objetivo / Explicación:
+# Evaluar si el refinamiento iterativo supera la exploración amplia.
+# Poca población pero muchas generaciones permite pulir soluciones.
+# Mutación más baja para preservar mejores genes.
+# Se espera convergencia más estable; riesgo de estancamiento si la población es homogénea.
+
+# ================================
+# Prueba C — Alta resolución de control
+# Datos / Parámetros:
+# pop_size = 50
+# generations = 70
+# num_steps = 2000
+# action_repeat = 2
+# mutation_rate = 0.08
+# elite_size = 2
+# selection = torneo (k=3)
+# crossover = 1-point
+# repetitions = 3–5
+
+# Objetivo / Explicación:
+# Evaluar si un gran número de decisiones mejora desempeño.
+# Mayor resolución de pasos permite maniobras más finas y mejor fitness si el AG explora bien.
+# Mayor coste computacional por individuo; contraste con Pruebas A y B.
+
 
 # ================================
 # Función auxiliar para crear entornos de CarRacing
@@ -72,9 +135,7 @@ def evaluate_population_parallel(population, action_repeat, neg_streak_limit=80,
     # Pre-expande los planes de acción
     expanded_all = [expand_plan(ind, action_repeat) for ind in population]
     T = len(expanded_all[0])
-
     scores = np.zeros(n, dtype=np.float32)
-
     for start in range(0, n, max_envs):
         end = min(start + max_envs, n)
         batch_idx = np.arange(start, end)
@@ -85,7 +146,6 @@ def evaluate_population_parallel(population, action_repeat, neg_streak_limit=80,
         total = np.zeros(len(batch), dtype=np.float32)
         done = np.zeros(len(batch), dtype=bool)
         neg_streak = np.zeros(len(batch), dtype=np.int32)
-
         for t in range(T):
             a = np.zeros((len(batch), 3), dtype=np.float32)
             active = ~done
@@ -217,16 +277,21 @@ def genetic_algorithm(
 
     max_fitness_history = []
     avg_fitness_history = []
+    gen_times = []
 
     for gen in range(generations):
+        gen_start = time.time() 
         fitness_scores = evaluate_population_parallel(population, action_repeat=action_repeat, neg_streak_limit=neg_streak_limit)
+
+        gen_time = time.time() - gen_start 
+        gen_times.append(gen_time)  
 
         max_fitness = float(np.max(fitness_scores))
         avg_fitness = float(np.mean(fitness_scores))
         max_fitness_history.append(max_fitness)
         avg_fitness_history.append(avg_fitness)
 
-        print(f"Gen {gen+1:>3}/{generations} | Max: {max_fitness:7.2f} | Avg: {avg_fitness:7.2f}")
+        print(f"Gen {gen+1:>3}/{generations} | Max: {max_fitness:7.2f} | Avg: {avg_fitness:7.2f} | Tiempo: {gen_time:.2f}s")
 
         population = next_generation(population, fitness_scores, elite_size=elite_size, mutation_rate=mutation_rate)
 
@@ -238,6 +303,7 @@ def genetic_algorithm(
     history = {
         "max_fitness": max_fitness_history,
         "avg_fitness": avg_fitness_history,
+        "gen_times": gen_times,
     }
     return best_individual, history
 
@@ -283,6 +349,59 @@ def render_individual_realtime_smooth(individual: np.ndarray, action_repeat: int
     plt.close(fig)
     env.close()
     print(f"Total reward: {total_reward:.2f}")
+# ================================
+# Funciones para graficar las pruebas experimentales
+# ================================
+
+def plot_fitness_curves(all_histories, gens):
+    """
+    Grafica el progreso del fitness máximo y promedio por generación,
+    mostrando la media y desviación estándar entre corridas.
+    """
+    # Convertir en matrices [n_runs, generations]
+    max_fitness_runs = np.array([h["max_fitness"] for h in all_histories])
+    avg_fitness_runs = np.array([h["avg_fitness"] for h in all_histories])
+
+    gens_range = np.arange(1, gens+1)
+
+    # Promedio y desviación estándar
+    max_mean = np.mean(max_fitness_runs, axis=0)
+    max_std  = np.std(max_fitness_runs, axis=0)
+    avg_mean = np.mean(avg_fitness_runs, axis=0)
+    avg_std  = np.std(avg_fitness_runs, axis=0)
+
+    plt.figure(figsize=(10, 6))
+    # Fitness máximo
+    plt.plot(gens_range, max_mean, label="Fitness máximo (media)", color="blue")
+    plt.fill_between(gens_range, max_mean-max_std, max_mean+max_std, color="blue", alpha=0.2)
+    # Fitness promedio
+    plt.plot(gens_range, avg_mean, label="Fitness promedio (media)", color="orange")
+    plt.fill_between(gens_range, avg_mean-avg_std, avg_mean+avg_std, color="orange", alpha=0.2)
+
+    plt.xlabel("Generación")
+    plt.ylabel("Fitness")
+    plt.title("Evolución del Fitness (media ± desviación estándar)")
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.6)
+    plt.show()
+
+
+def plot_execution_times(all_histories):
+    """
+    Grafica el tiempo de cada corrida para comparar consumo de CPU.
+    """
+    run_times = [np.sum(h["gen_times"]) for h in all_histories]
+    runs = np.arange(1, len(run_times)+1)
+
+    plt.figure(figsize=(8, 5))
+    plt.bar(runs, run_times, color="green", alpha=0.7)
+    plt.xlabel("Corrida")
+    plt.ylabel("Tiempo total (s)")
+    plt.title("Tiempo total de cada corrida")
+    plt.grid(axis="y", linestyle="--", alpha=0.6)
+    plt.show()
+
+
 
 # ================================
 # Simple console menu
@@ -299,8 +418,8 @@ def main_menu():
     best_individual = None
     history = None
     defaults = {
-        "generations": 10,
-        "pop_size": 32,
+        "generations": 50,
+        "pop_size": 30,
         "num_steps": 30,
         "action_repeat": 4,
         "mutation_rate": 0.08,
@@ -313,7 +432,8 @@ def main_menu():
         print("1. Ejecutar Algoritmo Genético")
         print("2. Visualizar mejor individuo")
         print("3. Graficar evolución del fitness")
-        print("4. Salir")
+        print("4. Pruebas experimentales")
+        print("5. Salir")
         opt = input("Elige una opción: ").strip()
 
         if opt == "1":
@@ -376,8 +496,89 @@ def main_menu():
                 plt.title("Evolución del fitness")
                 plt.legend()
                 plt.show()
-
         elif opt == "4":
+            # ========================
+            # Configuración de pruebas experimentales
+            # ========================
+            try:
+                n_runs = int(input("Cantidad de repeticiones de la prueba: ").strip())
+            except ValueError:
+                n_runs = 3
+                print("Valor inválido, usando 3 repeticiones por defecto.")
+
+            # Pedir parámetros del AG
+            try:
+                gens = input(f"Generaciones [{defaults['generations']}]: ").strip()
+                pop  = input(f"Tamaño de población [{defaults['pop_size']}]: ").strip()
+                decs = input(f"Numero de pasos por episodio [{defaults['num_steps']}]: ").strip()
+                arep = input(f"Repeticiones por acción [{defaults['action_repeat']}]: ").strip()
+                mut  = input(f"Tasa de mutación [{defaults['mutation_rate']}]: ").strip()
+                elite = input(f"Tamaño de élite [{defaults['elite_size']}]: ").strip()
+                nsl  = input(f"Límite de racha negativa [{defaults['neg_streak_limit']}]: ").strip()
+
+                gens = int(gens) if gens else defaults['generations']
+                pop  = int(pop) if pop else defaults['pop_size']
+                decs = int(decs) if decs else defaults['num_steps']
+                arep = int(arep) if arep else defaults['action_repeat']
+                mut  = float(mut) if mut else defaults['mutation_rate']
+                elite = int(elite) if elite else defaults['elite_size']
+                nsl  = int(nsl) if nsl else defaults['neg_streak_limit']
+            except ValueError:
+                print("Entrada inválida. Usando valores por defecto.")
+                gens = defaults['generations']
+                pop  = defaults['pop_size']
+                decs = defaults['num_steps']
+                arep = defaults['action_repeat']
+                mut  = defaults['mutation_rate']
+                elite = defaults['elite_size']
+                nsl  = defaults['neg_streak_limit']
+
+            all_histories = []
+            best_overall = None
+            best_score_overall = -np.inf
+
+            for run in range(n_runs):
+                print(f"\n=== Ejecución {run+1}/{n_runs} ===")
+                seed = int(time.time()) + run
+                np.random.seed(seed)
+                random.seed(seed)
+
+                start = time.time()
+                best_ind, hist = genetic_algorithm(
+                    generations=gens,
+                    pop_size=pop,
+                    num_steps=decs,
+                    action_repeat=arep,
+                    mutation_rate=mut,
+                    elite_size=elite,
+                    neg_streak_limit=nsl,
+                )
+                dur = time.time() - start
+                print(f"Run {run+1} finalizada en {dur:.1f}s")
+
+                # Guardar historial
+                all_histories.append(hist)
+
+                # Actualizar mejor individuo global
+                max_run_score = max(hist["max_fitness"])
+                if max_run_score > best_score_overall:
+                    best_score_overall = max_run_score
+                    best_overall = best_ind
+
+            # ========================
+            # Graficar resultados
+            # ========================
+            # Graficar curvas de fitness
+            plot_fitness_curves(all_histories, gens)
+
+            #Graficar tiempos de ejecución
+            plot_execution_times(all_histories)
+
+            # Guardar el mejor individuo global para visualizar
+            best_individual = best_overall
+            history = None  # Opcional, para no confundir con una corrida individual
+            print("\nMejor individuo global listo para visualización.")
+        elif opt == "5":
             print("¡Hasta luego!")
             break
         else:
